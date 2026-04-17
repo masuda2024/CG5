@@ -4,8 +4,8 @@
 #include<cstdint>
 #include<string>
 #include<format>
-#include <cmath>
-
+#include<cmath>
+#include<numbers>
 	#pragma region DirectXインクルード・リンク
 
 #include<d3d12.h>
@@ -113,6 +113,29 @@ struct Vector4
 	#pragma endregion
 
 #pragma endregion
+
+
+/**/
+//ブレンドモード
+enum BlendMode
+{
+	//!<ブレンドなし
+	kBlendModeNone,
+	//!<　通常αブレンド デフォルト Src * SrcA + Dest * (1 - SrcA)
+	kBlendModeNormal,
+	//!<　加算 Src * SrcA + Dest * 1
+	kBlendModeAdd,
+	//!< 減算 Dest * 1 - Src * SrcA
+	kBlendModeSubtract,
+	//!< 乗算 Src * θ + Dest * Src
+	kBlendModeMultiply,
+	//!< スクリーン Src * (1 - Dest) + Dest * 1
+	kBlendModeScreen,
+	//利用してはいけない
+	kCount0fBlendMode,
+};
+
+
 
 #pragma region 行列
 
@@ -1189,7 +1212,63 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 		blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
 
-	#pragma endregion
+
+/*
+		blendDesc.RenderTarget[0].BlendEnable = TRUE;
+
+		//通常
+		
+		blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+		blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+		blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+		//Result = SrcColor * SrcAlpha + DestColor * (1-SrcAlpha)
+
+
+
+		//共通
+		blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+		blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+		blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+*/
+
+
+
+		//加算合成
+		/*
+		blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+		blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+		blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+		*/
+
+
+	    //減算合成(逆減算合成)
+	    /*
+	    blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	    blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
+	    blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+	    */
+	    
+
+	    //乗算合成
+	    /*
+	    blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ZERO;
+	    blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	    blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_SRC_COLOR;
+	    */
+
+
+	    //スクリーン合成
+	    /*
+	    blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_INV_DEST_COLOR;
+	    blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	    blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+	    */
+
+
+
+		#pragma endregion
+
+
 
 		#pragma region RasterizerStateの設定
 
@@ -1404,9 +1483,9 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 	//    []
 	//   [][]
-	//  [][][]
-	// [][][][]
-	//[][][][][]
+	//  [][][]   +     []
+	// [][][][]      [][][]
+	//[][][][][]   [][][][][]
 #pragma region 三角形のTransformationMatrix用のResorceを作る
 
 	//VertexRecource(関数化済)を生成する
@@ -1629,6 +1708,137 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 #pragma endregion
 
 
+	//  [][][]
+	//[]//[][][]
+	//[/[][][][]
+	//[][][][][]
+	//  [][][]
+
+#pragma region 球のリソース
+
+
+	//球表示用
+	const uint32_t kSubdivision = 12;
+	const uint32_t kNumSphereVertices = kSubdivision * kSubdivision * 6;
+	float pi = std::numbers::pi_v<float>;
+
+
+	ID3D12Resource* sphereVertexResource = CreateBufferResource(device, sizeof(VertexData) * kNumSphereVertices);
+
+
+	//頂点バッファビューを作成する
+	D3D12_VERTEX_BUFFER_VIEW sphereVertexBufferView{};
+	//リソースの先頭のアドレスから使う
+	sphereVertexBufferView.BufferLocation = sphereVertexResource->GetGPUVirtualAddress();
+	//使用するリソースのサイズは頂点3つ分のサイズ
+	sphereVertexBufferView.SizeInBytes = sizeof(VertexData) * kNumSphereVertices;
+	//1頂点あたりのサイズ
+	sphereVertexBufferView.StrideInBytes = sizeof(VertexData);
+
+	//頂点リソースにデータを書き込む
+	VertexData* sphereVertexData = nullptr;
+	//書き込むためのアドレスを取得
+	sphereVertexResource->Map(0, nullptr, reinterpret_cast<void**>(&sphereVertexData));
+
+
+	//経度分割1つ分の角度φ
+	const float kLonEvery = pi * 2.0f / float(kSubdivision);
+	//緯度分割1つ分の角度θ
+	const float kLatEvery = pi / float(kSubdivision);
+
+	//緯度の方向に分割
+	for (uint32_t latIndex = 0; latIndex < kSubdivision; latIndex++)
+	{
+		float lat = -pi / 2.0f + kLatEvery * latIndex;
+		//経度の方向に分割しながら線を描く
+		for (uint32_t lonIndex = 0; lonIndex < kSubdivision; lonIndex++)
+		{
+			uint32_t start = (latIndex * kSubdivision + lonIndex) * 6;
+			float lon = lonIndex * kLonEvery;
+			//頂点にデータを入力する
+			sphereVertexData[start].position.x = std::cos(lat) * std::cos(lon);
+			sphereVertexData[start].position.y = std::sin(lat);
+			sphereVertexData[start].position.z = std::cos(lat) * std::sin(lon);
+			sphereVertexData[start].position.w = 1.0f;
+			sphereVertexData[start].texcoord = { float(lonIndex) / float(kSubdivision),1.0f - float(latIndex) / float(kSubdivision) };
+
+			sphereVertexData[start + 1].position.x = std::cos(lat + kLatEvery) * std::cos(lon);
+			sphereVertexData[start + 1].position.y = std::sin(lat + kLatEvery);
+			sphereVertexData[start + 1].position.z = std::cos(lat + kLatEvery) * std::sin(lon);
+			sphereVertexData[start + 1].position.w = 1.0f;
+			sphereVertexData[start + 1].texcoord = { float(lonIndex) / float(kSubdivision),1.0f - float(latIndex + 1) / float(kSubdivision) };
+
+			sphereVertexData[start + 2].position.x = std::cos(lat) * std::cos(lon + kLonEvery);
+			sphereVertexData[start + 2].position.y = std::sin(lat);
+			sphereVertexData[start + 2].position.z = std::cos(lat) * std::sin(lon + kLonEvery);
+			sphereVertexData[start + 2].position.w = 1.0f;
+			sphereVertexData[start + 2].texcoord = { float(lonIndex + 1) / float(kSubdivision),1.0f - float(latIndex) / float(kSubdivision) };
+
+			sphereVertexData[start + 3] = sphereVertexData[start + 2];
+			sphereVertexData[start + 4] = sphereVertexData[start + 1];
+
+			sphereVertexData[start + 5].position.x = std::cos(lat + kLatEvery) * std::cos(lon + kLonEvery);
+			sphereVertexData[start + 5].position.y = std::sin(lat + kLatEvery);
+			sphereVertexData[start + 5].position.z = std::cos(lat + kLatEvery) * std::sin(lon + kLonEvery);
+			sphereVertexData[start + 5].position.w = 1.0f;
+			sphereVertexData[start + 5].texcoord = { float(lonIndex + 1) / float(kSubdivision),1.0f - float(latIndex + 1) / float(kSubdivision) };
+		}
+	}
+
+
+	//球マテリアル用のリソースを作る。今回はcolor1つ分のサイズを用意する
+	ID3D12Resource* materialResourceSphere = CreateBufferResource(device, sizeof(Vector4));
+	//マテリアルにデータを書き込む
+	Vector4* materialDataSphere = nullptr;
+	//書き込むためのアドレスを取得
+	materialResourceSphere->Map(0, nullptr, reinterpret_cast<void**>(&materialDataSphere));
+	//今回は赤を書き込む
+	*materialDataSphere = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+
+
+
+
+
+	//球WVP用のリソースを作る。Matrix4x4 1つ分のサイズを用意する
+	ID3D12Resource* wvpResourceSphere = CreateBufferResource(device, sizeof(Matrix4x4));
+	//データを書き込む
+	Matrix4x4* wvpDataSphere = nullptr;
+	//書き込むためにアドレスを取得
+	wvpResourceSphere->Map(0, nullptr, reinterpret_cast<void**>(&wvpDataSphere));
+	//単位行列を書き込んでおく
+	*wvpDataSphere = MakeIdentity4x4();
+
+
+
+
+
+
+	//スプライトのTransform
+	Transform transformSphere
+	{
+		{1.0f,1.0f,1.0f},
+		{0.0f,0.0f,0.0f},
+		{0.0f,0.0f,0.0f}
+	};
+
+	#pragma region 球の設定
+
+	bool drawSphere = false;
+	bool sphereReset = false;
+	bool sphereRotateX = false;
+	bool sphereRotateY = false;
+	bool sphereRotateZ = false;
+
+	#pragma endregion
+
+
+
+
+#pragma endregion
+
+
+
+
 
 
 
@@ -1676,6 +1886,15 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 				cameraTransform.translate = { 0.0f,0.0f,-15.0f };
 				cameraReset = false;
 			}
+
+
+
+			//ImGui::Begin("BlendMode");
+			//ImGui::ColorEdit4("material", &materialData->x, ImGuiColorEditFlags_AlphaPreview);
+			//ImGui::Checkbox("Update", &useUpdate);
+			//ImGui::End();
+
+
 
 
 			#pragma region 三角形
@@ -1732,7 +1951,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 			#pragma endregion
 
 			
-#pragma region スプライト
+			#pragma region スプライト
 
 
 			ImGui::Begin("Sprite");
@@ -1783,11 +2002,61 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 			{
 				transformSprite.rotate.z += 0.03f;
 			}
-#pragma endregion
+			#pragma endregion
+
+
+			#pragma region 球
+
+
+			ImGui::Begin("Sphere");
+
+			ImGui::Checkbox("Draw", &drawSphere);
+
+			ImGui::Checkbox("Reset", &sphereReset);
+
+			
+			ImGui::DragFloat3("SphereScale-X", &transformSphere.scale.x, 0.1f);
+			ImGui::DragFloat3("SphereScale-Y", &transformSphere.scale.y, 0.1f);
+			ImGui::DragFloat3("SphereScale-Z", &transformSphere.scale.z, 0.1f);
+
+			ImGui::Checkbox("SphereRotate-X", &sphereRotateX);
+			ImGui::Checkbox("SphereRotate-Y", &sphereRotateY);
+			ImGui::Checkbox("SphereRotate-Z", &sphereRotateZ);
+
+			ImGui::DragFloat3("SphereTranslate-X", &transformSphere.translate.x, 0.1f);
+			ImGui::DragFloat3("SphereTranslate-Y", &transformSphere.translate.y, 0.1f);
+			ImGui::DragFloat3("SphereTranslate-Z", &transformSphere.translate.z, 0.1f);
+
+			ImGui::End();
 
 
 
 
+			if (sphereReset)
+			{
+				transformSphere.scale = { 1.0f,1.0f,1.0f };
+				transformSphere.rotate = { 0.0f,0.0f,0.0f };
+				transformSphere.translate = { 0.0f,0.0f,0.0f };
+				sphereRotateX = false;
+				sphereRotateY = false;
+				sphereRotateZ = false;
+				sphereReset = false;
+			}
+
+			if (sphereRotateX)
+			{
+				transformSphere.rotate.x += 0.03f;
+			}
+			if (sphereRotateY)
+			{
+				transformSphere.rotate.y += 0.03f;
+			}
+			if (sphereRotateZ)
+			{
+				transformSphere.rotate.z += 0.03f;
+			}
+
+			#pragma endregion
 
 
 
@@ -1887,7 +2156,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 			#pragma region コマンドを積む
 
-			//三角形の描画のコマンドを積む
+			//描画のコマンドを積む
 			commandList->RSSetViewports(1, &viewport);//Viewportを設定
 			commandList->RSSetScissorRects(1, &scissorRect);//DcissorRectを設定
 			//RootSignatureを設定。PSOに設定しているが別途設定が必要
@@ -1968,8 +2237,6 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	        //[][][][][][][][][][]
 	        //[][][][][][][][][][]
 	        //[][][][][][][][][][]
-
-
 			#pragma region スプライトの更新と描画
 			
 			//Sprite用のWorldViewProjectionMatrixを作る
@@ -1994,6 +2261,52 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 			}
 
 			#pragma endregion
+
+
+
+			//  [][][]
+	        //[]//[][][]
+	        //[/[][][][]
+	        //[][][][][]
+	        //  [][][]
+			#pragma region 球の更新と描画
+
+			//球用のWorldViewProjectionMatrixを作る
+			Matrix4x4 worldMatrixSphere = MakeAffineMatrix(transformSphere.scale, transformSphere.rotate, transformSphere.translate);
+			Matrix4x4 cameraMatrixSphere = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
+			Matrix4x4 viewMatrixSphere = Inverse(cameraMatrixSphere);
+			Matrix4x4 projectionMatrixSphere = MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
+			Matrix4x4 worldViewProjectionMatrixSphere = Multiply(worldMatrixSphere, Multiply(viewMatrixSphere, projectionMatrixSphere));
+			*wvpDataSphere = worldViewProjectionMatrixSphere;
+
+
+			//VBVを設定
+			commandList->IASetVertexBuffers(0, 1, &sphereVertexBufferView);
+
+			//マテリアルCBufferの場所を設定
+			commandList->SetGraphicsRootConstantBufferView(0, materialResourceSphere->GetGPUVirtualAddress());
+
+			//wvp用のCBufferの場所を設定
+			//これをいれないと描画ができない
+			commandList->SetGraphicsRootConstantBufferView(1, wvpResourceSphere->GetGPUVirtualAddress());
+
+
+			//描画
+			if (drawSphere)
+			{
+				commandList->DrawInstanced(kNumSphereVertices, 1, 0, 0);
+			}
+
+			#pragma endregion
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2123,6 +2436,10 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	vertexResourceSprite->Release();
 	transformationMatrixResourceSprite->Release();
 	
+	//球
+	sphereVertexResource->Release();
+	wvpResourceSphere->Release();
+
 	#pragma endregion 
 
 

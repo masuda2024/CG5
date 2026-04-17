@@ -118,6 +118,7 @@ struct Vector4
 	{
 		Vector4 color;
 		int32_t enableLighting;
+		float shininess;
 	};
 
 	struct DirectionalLight
@@ -125,6 +126,13 @@ struct Vector4
 		Vector4 color;     //ライトの色
 		Vector3 direction; //ライトの向き
 		float intensity;   //輝度
+	};
+
+	
+
+	struct CameraForGPU
+	{
+		Vector3 worldPosition;
 	};
 
 #pragma endregion
@@ -1153,7 +1161,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 		#pragma region Rootparameter(RootSignature部に追加)
 
 		//RootParameter作成。複数設定できるので配列。今回は結果1つだけなので長さ1の配列
-		D3D12_ROOT_PARAMETER rootParameters[4] = {};
+		D3D12_ROOT_PARAMETER rootParameters[6] = {};
 		//CBVを使う//b0のbと一致する--------------------↓
 		//ConstantBuffer<Material> gMaterial : register(b0);
 		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -1184,6 +1192,25 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 		rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 		//レジスタ番号1を使う
 		rootParameters[3].Descriptor.ShaderRegister = 1;
+
+		//CBVを使う
+		rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		//PixelShaderで使う
+		rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		//レジスタ番号1を使う
+		rootParameters[4].Descriptor.ShaderRegister = 2;
+
+
+		//CBVを使う
+		rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		//PixelShaderで使う
+		rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		//レジスタ番号1を使う
+		rootParameters[5].Descriptor.ShaderRegister = 3;
+
+
+
+
 
 
 
@@ -1360,7 +1387,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
 
 
-#pragma endregion
+		#pragma endregion
 
 		#pragma region ShaderをCompileする
 	
@@ -1478,7 +1505,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	//今回は赤を書き込む
 	materialData->color = Vector4(1.0f, 0.0f, 0.0f, 1.0f);
 	materialData->enableLighting = true;
-
+	materialData->shininess = 70.0f;
 #pragma endregion
 
 
@@ -1512,7 +1539,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 
 
-#pragma region Texture
+#pragma region Texture関連
 
 	//DescriptorSizeを取得しておく
 	const uint32_t descriptorSizeSRV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -1590,13 +1617,30 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	//   [>[二]
 	//
 	//
+#pragma region カメラ用
+	
+	//カメラ位置を指定
 	Transform cameraTransform
 	{
 		{1.0f,1.0f,1.0f},
 		{0.0f,0.0f,0.0f},
 		{0.0f,0.0f,-15.0f}
 	};
+
+	//カメラ用のリソースを作る
+	ID3D12Resource* cameraResource = CreateBufferResource(device, sizeof(CameraForGPU));
+	//マテリアルにデータを書き込む
+	CameraForGPU* cameraData = nullptr;
+	//書き込むためのアドレスを取得
+	cameraResource->Map(0, nullptr, reinterpret_cast<void**>(&cameraData));
+	cameraData->worldPosition = cameraTransform.translate;
+
+
 	bool cameraReset = false;
+
+#pragma endregion
+
+
 
 
 	#pragma region テクスチャ設定
@@ -1623,7 +1667,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 	//デフォルト値
 	directionalLightData->color = { 1.0f,1.0f,1.0f,1.0f };
-	directionalLightData->direction = { 0.0f,1.0f,0.0f };
+	directionalLightData->direction = { 0.0f,-1.0f,0.0f };
 	directionalLightData->intensity = 1.0f;
 
 
@@ -1632,15 +1676,9 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 
 
-
+	
 
 #pragma endregion
-
-
-
-
-
-
 
 
 
@@ -1711,7 +1749,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	//今回は赤を書き込む
 	materialDataTriangle->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
 	materialDataTriangle->enableLighting = true;
-
+	materialDataTriangle->shininess = 70.0f;
 
 
 
@@ -1724,7 +1762,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	//単位行列を書き込んでおく
 	wvpDataTriangle->WVP = MakeIdentity4x4();
 	wvpDataTriangle->World = MakeIdentity4x4();
-
+	wvpDataTriangle->WorldInverseTranspose = MakeIdentity4x4();
 	
 	//三角形のTransform
 	Transform transformTriangle
@@ -1844,7 +1882,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	//単位行列書き込む
 	transformationMatrixDataSprite->WVP = MakeIdentity4x4();
 	transformationMatrixDataSprite->World = MakeIdentity4x4();
-
+	transformationMatrixDataSprite->WorldInverseTranspose = MakeIdentity4x4();
 
 	
 
@@ -1991,7 +2029,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	//今回は赤を書き込む
 	materialDataSphere->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
 	materialDataSphere->enableLighting = true;
-
+	materialDataSphere->shininess = 70.0f;
 
 
 
@@ -2004,7 +2042,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	//単位行列を書き込んでおく
 	wvpDataSphere->WVP = MakeIdentity4x4();
 	wvpDataSphere->World = MakeIdentity4x4();
-
+	wvpDataSphere->WorldInverseTranspose = MakeIdentity4x4();
 
 
 
@@ -2080,7 +2118,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 			ImGui::Checkbox("LightReset", &lightReset);
 			ImGui::DragFloat3("Light", &directionalLightData->direction.x, 0.01f, -1.0f, 1.0f);
 
-
+			
 
 			//カメラ
 			ImGui::Checkbox("CameraReset", &cameraReset);
@@ -2105,7 +2143,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 			if (lightReset)
 			{
 				directionalLightData->color = { 1.0f,1.0f,1.0f,1.0f };
-				directionalLightData->direction = { 0.0f,1.0f,0.0f };
+				directionalLightData->direction = { 0.0f,-1.0f,0.0f };
 				directionalLightData->intensity = 1.0f;
 				lightReset = false;
 			}
@@ -2115,6 +2153,12 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 			#pragma endregion
 
+
+
+
+
+
+
             #pragma region カメラ
 
 			if (cameraReset)
@@ -2123,6 +2167,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 				cameraTransform.translate = { 0.0f,0.0f,-15.0f };
 				cameraReset = false;
 			}
+			
 
 			#pragma endregion
 		
@@ -2392,13 +2437,26 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			
 
+			#pragma endregion
+
+
+
+
+
+
+
+
+
 			//マテリアルCBufferの場所を設定
 			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
 
 			//ライトのCBufferの場所を設定
 			commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress());
-			#pragma endregion
-
+			
+			//カメラのCBufferの場所を設定
+			commandList->SetGraphicsRootConstantBufferView(4, cameraResource->GetGPUVirtualAddress());
+			
+			
 
 
 
@@ -2671,6 +2729,17 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	//球
 	vertexResourceSphere->Release();
 	wvpResourceSphere->Release();
+
+
+	//ライト
+	directionalLightResource->Release();
+	
+
+	//カメラ
+	cameraResource->Release();
+
+
+
 
 	#pragma endregion 
 

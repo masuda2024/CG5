@@ -4,7 +4,10 @@ struct Material
 {
     float32_t4 color;
     int32_t enableLighting;
+    float32_t shininess;
 };
+ConstantBuffer<Material> gMaterial : register(b0);
+
 
 struct DirectionalLight
 {
@@ -16,8 +19,14 @@ ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
 
 
 
+struct Camera
+{
+    float32_t3 worldPosition;
+};
+ConstantBuffer<Camera> gCamera : register(b2);
 
-ConstantBuffer<Material> gMaterial : register(b0);
+
+
 
 
 Texture2D<float32_t4> gTexture : register(t0);
@@ -39,15 +48,58 @@ PixelShaderOutput main(VertexShaderOutput input)
     
     if (gMaterial.enableLighting != 0)
     {
+        
+         
+      
+        //カメラの方向を算出
+        float32_t3 toEye = normalize(gCamera.worldPosition - input.worldPosition);
+        float32_t3 reflectLight = reflect(gDirectionalLight.direction, normalize(input.normal));
+        float RdotE = dot(reflectLight, toEye);
+        float specularPow = pow(saturate(RdotE), gMaterial.shininess); //反射強度
+        
+        
+        
+        
+         //HalfVector
+        float32_t3 halfVector = normalize(-gDirectionalLight.direction + toEye);
+        float NDotH = dot(normalize(input.normal), halfVector);
+        float specularPow2 = pow(saturate(NDotH), gMaterial.shininess);
+        
+        
+        
         //HalfLambert
         float NdotL = dot(normalize(input.normal), -gDirectionalLight.direction);
         float cos = pow(NdotL * 0.5f + 0.5f, 2.0f);
     
         //float cos = saturate(dot(normalize(input.normal), gDirectionalLight.direction));
-        output.color = gMaterial.color * textureColor * gDirectionalLight.color * cos * gDirectionalLight.intensity;
+        //output.color = gMaterial.color * textureColor * gDirectionalLight.color * cos * gDirectionalLight.intensity;
         
-    }
-    else //Lightingしない場合
+         //拡散反射
+        float32_t3 diffuseDirectionalLight =
+        gMaterial.color.rgb * textureColor.rgb * gDirectionalLight.color.rgb * cos * gDirectionalLight.intensity;
+        
+       
+        
+        
+        //鏡面反射
+        float32_t3 specularDirectionalLight =
+        gDirectionalLight.color.rgb * gDirectionalLight.intensity * specularPow * float32_t3(1.0f, 1.0f, 1.0f);
+        
+        
+        //拡散反射+鏡面反射
+        output.color.rgb = diffuseDirectionalLight + specularDirectionalLight;
+        //アルファは今まで通り
+        output.color.a = gMaterial.color.a * textureColor.a;
+        
+       
+        
+        
+        
+        
+        
+        
+        
+    }else //Lightingしない場合
     {
         output.color = gMaterial.color * textureColor;
     }

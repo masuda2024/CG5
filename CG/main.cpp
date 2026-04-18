@@ -169,6 +169,8 @@ struct Vector4
 		kCount0fBlendMode,
 	};
 
+
+
 #pragma endregion
 
 	#pragma region ベクトルの計算
@@ -1790,6 +1792,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 	//テクスチャ切り替え
 	bool useMonsterBall = false;
+	bool useGround = false;
 
 	
 
@@ -2591,6 +2594,9 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 			//テクスチャ切り替え
 			ImGui::Checkbox("UseMonsterBall", &useMonsterBall);
+			ImGui::Checkbox("UseGround", &useGround);
+
+
 
 			//ブレンドモード
 			ImGui::ColorEdit4("materialTriangle | Sprite", &materialDataTriangle->color.x, ImGuiColorEditFlags_AlphaPreview);
@@ -3016,14 +3022,17 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 			//SRVのDescriptorTableの先頭を設定。2はrootParameter[2]である。
 			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
-
+			
 
 			if (useMonsterBall)
 			{
 				commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU2);
 			}
 
-
+			if (useGround)
+			{
+				commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU3);
+			}
 			#pragma endregion
 
 
@@ -3247,6 +3256,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 			if (drawGround)
 			{
 				commandList->DrawInstanced(UINT(modelDataGround.vertices.size()), 1, 0, 0);
+				
 			}
 
 

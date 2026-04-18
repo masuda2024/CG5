@@ -1759,6 +1759,35 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 	#pragma endregion
 
+	#pragma region 3枚目 Ground
+
+	//2枚目のTextureを読んで転送する
+	DirectX::ScratchImage mipImages3 = LoadTexture("resources/Grass_Ground.png");
+	const DirectX::TexMetadata& metadata3 = mipImages3.GetMetadata();
+	ID3D12Resource* textureResource3 = CreateTextureResource(device, metadata3);
+	UploadTextureData(textureResource3, mipImages3);
+
+	//metadataを基にSRVの設定
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc3{};
+	srvDesc3.Format = metadata3.format;
+	srvDesc3.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc3.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc3.Texture2D.MipLevels = UINT(metadata3.mipLevels);
+
+	//SRVを作成するDescriptorHeapの場所を決める
+	D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU3 = GetCPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 3);
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU3 = GetGPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 3);
+	//SRVの生成
+	device->CreateShaderResourceView(textureResource3, &srvDesc3, textureSrvHandleCPU3);
+
+#pragma endregion
+
+
+
+
+
+
+
 	//テクスチャ切り替え
 	bool useMonsterBall = false;
 
@@ -1783,8 +1812,8 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	Transform cameraTransform
 	{
 		{1.0f,1.0f,1.0f},
-		{0.0f,0.0f,0.0f},
-		{0.0f,0.0f,-15.0f}
+		{0.3f,0.0f,0.0f},
+		{0.0f,6.0f,-17.0f}
 	};
 
 	//カメラ用のリソースを作る
@@ -2362,10 +2391,10 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
       //[][][][]
       //[][][][]
 	#pragma region Plane
-		//モデル読み込み
+		
+	    //モデル読み込み
 		ModelData modelDataPlane = LoadObjFile("resources", "plane.obj");
 	   
-
 
 		//頂点リソースを作る
 		ID3D12Resource* vertexResourcePlane = CreateBufferResource(device, sizeof(VertexData) * modelDataPlane.vertices.size());
@@ -2426,6 +2455,78 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 
 	#pragma endregion
+
+
+
+	//
+	//
+	//  v____  v  __  
+	//[][][][][][][]
+	#pragma region Ground
+
+		//モデル読み込み
+		ModelData modelDataGround = LoadObjFile("resources", "Ground.obj");
+
+
+		//頂点リソースを作る
+		ID3D12Resource* vertexResourceGround = CreateBufferResource(device, sizeof(VertexData) * modelDataGround.vertices.size());
+
+		//頂点バッファービューを作成する
+		D3D12_VERTEX_BUFFER_VIEW vertexBufferViewGround{};
+		vertexBufferViewGround.BufferLocation = vertexResourceGround->GetGPUVirtualAddress();
+		vertexBufferViewGround.SizeInBytes = UINT(sizeof(VertexData) * modelDataGround.vertices.size());
+		vertexBufferViewGround.StrideInBytes = sizeof(VertexData);
+
+
+		//頂点リソースにデータを書き込む
+		VertexData* vertexDataGround = nullptr;
+		vertexResourceGround->Map(0, nullptr, reinterpret_cast<void**>(&vertexDataGround));
+
+		std::memcpy(vertexDataGround, modelDataGround.vertices.data(), sizeof(VertexData)* modelDataGround.vertices.size());
+
+		//モデルのマテリアル用のリソースを作る。今回はcolor1つ分のサイズを用意する
+		ID3D12Resource* materialResourceGround = CreateBufferResource(device, sizeof(Material));
+		//マテリアルにデータを書き込む
+		Material* materialDataGround = nullptr;
+		//書き込むためのアドレスを取得
+		materialResourceGround->Map(0, nullptr, reinterpret_cast<void**>(&materialDataGround));
+		//今回は赤を書き込む
+		materialDataGround->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+		materialDataGround->enableLighting = true;
+		materialDataGround->shininess = 70.0f;
+
+
+		//モデルWVP用のリソースを作る。Matrix4x4 1つ分のサイズを用意する
+		ID3D12Resource* wvpResourceGround = CreateBufferResource(device, sizeof(TransformationMatrix));
+		//データを書き込む
+		TransformationMatrix* wvpDataGround = nullptr;
+		//書き込むためにアドレスを取得
+		wvpResourceGround->Map(0, nullptr, reinterpret_cast<void**>(&wvpDataGround));
+		//単位行列を書き込んでおく
+		wvpDataGround->WVP = MakeIdentity4x4();
+		wvpDataGround->World = MakeIdentity4x4();
+		wvpDataGround->WorldInverseTranspose = MakeIdentity4x4();
+
+
+
+		//プランのTransform
+		Transform transformGround
+		{
+			{1.0f,1.0f,1.0f},
+			{0.0f,0.0f,0.0f},
+			{0.0f,0.0f,0.0f}
+		};
+
+
+
+		bool drawGround = false;
+		bool groundReset = false;
+		bool groundRotateX = false;
+		bool groundRotateY = false;
+		bool groundRotateZ = false;
+
+
+#pragma endregion
 
 
 
@@ -2519,8 +2620,8 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 			if (cameraReset)
 			{
-				cameraTransform.rotate = { 0.0f,0.0f,0.0f };
-				cameraTransform.translate = { 0.0f,0.0f,-15.0f };
+				cameraTransform.rotate = { 0.3f,0.0f,0.0f };
+				cameraTransform.translate = { 0.0f,6.0f,-17.0f };
 				cameraReset = false;
 			}
 			
@@ -2703,13 +2804,13 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 			ImGui::Checkbox("Reset", &planeReset);
 
 
-			ImGui::DragFloat3("SphereScale", &transformPlane.scale.x, 0.1f);
+			ImGui::DragFloat3("PlaneScale", &transformPlane.scale.x, 0.1f);
 
-			ImGui::DragFloat3("SphereRotate", &transformPlane.rotate.x, 0.1f);
+			ImGui::DragFloat3("PlaneRotate", &transformPlane.rotate.x, 0.1f);
 
-			ImGui::Checkbox("SphereAutoRotate-X", &planeRotateX);
-			ImGui::Checkbox("SphereAutoRotate-Y", &planeRotateY);
-			ImGui::Checkbox("SphereAutoRotate-Z", &planeRotateZ);
+			ImGui::Checkbox("PlaneAutoRotate-X", &planeRotateX);
+			ImGui::Checkbox("PlaneAutoRotate-Y", &planeRotateY);
+			ImGui::Checkbox("PlaneAutoRotate-Z", &planeRotateZ);
 
 			ImGui::DragFloat3("PlaneTranslate", &transformPlane.translate.x, 0.1f);
 
@@ -2741,6 +2842,53 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 			#pragma endregion
 
+			#pragma region 地面
+
+
+			ImGui::Begin("Ground");
+
+			ImGui::Checkbox("Draw", &drawGround);
+
+			ImGui::Checkbox("Reset", &groundReset);
+
+
+			ImGui::DragFloat3("GroundScale", &transformGround.scale.x, 0.1f);
+
+			ImGui::DragFloat3("GroundRotate", &transformGround.rotate.x, 0.1f);
+
+			ImGui::Checkbox("GroundAutoRotate-X", &groundRotateX);
+			ImGui::Checkbox("GroundAutoRotate-Y", &groundRotateY);
+			ImGui::Checkbox("GroundAutoRotate-Z", &groundRotateZ);
+
+			ImGui::DragFloat3("GroundTranslate", &transformGround.translate.x, 0.1f);
+
+			ImGui::End();
+
+			if (groundReset)
+			{
+				transformGround.scale = { 1.0f,1.0f,1.0f };
+				transformGround.rotate = { 0.0f,0.0f,0.0f };
+				transformGround.translate = { 0.0f,0.0f,0.0f };
+				groundRotateX = false;
+				groundRotateY = false;
+				groundRotateZ = false;
+				groundReset = false;
+			}
+
+			if (groundRotateX)
+			{
+				transformGround.rotate.x += 0.03f;
+			}
+			if (groundRotateY)
+			{
+				transformGround.rotate.y += 0.03f;
+			}
+			if (groundRotateZ)
+			{
+				transformGround.rotate.z += 0.03f;
+			}
+
+			#pragma endregion
 
 			
 			//開発用UIの処理。実際に開発用のUIを出す場合はここをゲーム固有の処理に置き換える
@@ -3040,7 +3188,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 
 
 
-
+			#pragma region プラン
 
 
 			Matrix4x4 worldMatrixPlane = MakeAffineMatrix(transformPlane.scale, transformPlane.rotate, transformPlane.translate);
@@ -3069,9 +3217,40 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 			}
 
 
+			#pragma endregion
+
+			#pragma region 地面
+
+		
+			Matrix4x4 worldMatrixGround = MakeAffineMatrix(transformGround.scale, transformGround.rotate, transformGround.translate);
+			Matrix4x4 cameraMatrixGround = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
+			Matrix4x4 viewMatrixGround = Inverse(cameraMatrixGround);
+			Matrix4x4 projectionMatrixGround = MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
+			Matrix4x4 worldViewProjectionMatrixGround = Multiply(worldMatrixGround, Multiply(viewMatrixGround, projectionMatrixGround));
+			wvpDataGround->WVP = worldViewProjectionMatrixGround;
+			wvpDataGround->World = worldMatrixGround;
 
 
 
+			//VBVを設定
+			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewGround);
+
+			//マテリアルCBufferの場所を設定
+			commandList->SetGraphicsRootConstantBufferView(0, materialResourceGround->GetGPUVirtualAddress());
+
+			//wvp用のCBufferの場所を設定
+			//これをいれないと描画ができない
+			commandList->SetGraphicsRootConstantBufferView(1, wvpResourceGround->GetGPUVirtualAddress());
+
+
+
+			if (drawGround)
+			{
+				commandList->DrawInstanced(UINT(modelDataGround.vertices.size()), 1, 0, 0);
+			}
+
+
+			#pragma endregion
 
 
 
@@ -3230,7 +3409,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	//プラン
 	vertexResourcePlane->Release();
 
-
+	vertexResourceGround->Release();
 
 	#pragma endregion 
 

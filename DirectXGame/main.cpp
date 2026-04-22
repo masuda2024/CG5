@@ -14,7 +14,7 @@ ID3DBlob* CompileShader(const std::wstring& filePath, const std::string& shaderM
 int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) 
 {
 	//エンジンの初期化
-	KamataEngine::Initialize(L"LE3D_22_マスダ_アキヒロ");
+	KamataEngine::Initialize(L"LE3D_22_マスダ_アキヒロ_CG5");
 	
 	//DirectXCommonインスタンスを取得する
 	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
